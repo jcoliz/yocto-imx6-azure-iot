@@ -1,0 +1,46 @@
+resources:
+- repo: self
+  clean: false
+
+jobs:
+- job: Job_Prep
+  displayName: Prep for parallel build
+  condition: succeededOrFailed()
+  pool:
+   vmImage: 'ubuntu-16.04'
+  timeoutInMinutes: 360
+  
+  steps: 
+  - checkout: none
+
+- job: Job_Yocto
+  displayName: Build Yocto image
+  condition: succeededOrFailed()
+  timeoutInMinutes: 360
+
+  steps:
+  - checkout: self
+    submodules: recursive
+    clean: all
+    condition: succeededOrFailed()
+
+  - bash: ./installbuildtools.sh 
+    displayName: 'Install host packages'
+
+  - task: Bash@3
+    displayName: Build Yocto image
+    inputs:
+      targetType: 'filePath'
+      filePath: './buildyocto.sh'
+      arguments: '-B $(Build.ArtifactStagingDirectory) -i $(imageType) -v 1.0.$(Build.BuildNumber) -n $(Build.BuildNumber) -t 4 -j 4 -M $(Build.ArtifactStagingDirectory)/sstateMirrors '
+      failOnStderr: true
+    continueOnError: true
+    condition: succeededOrFailed()
+    
+  - task: PublishBuildArtifacts@1
+    displayName: 'Publish Artifact: images'
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)/tmp/deploy/images'
+      ArtifactName: Images-$(imageType)
+    continueOnError: true
+    condition: succeededOrFailed()
